@@ -1,111 +1,107 @@
-from typing import TypedDict, Annotated, Optional
+from litellm import api_base
+from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, END
-from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, SystemMessage
 import re
+import dspy
 
-# --- 1. DEFINE THE STATE ---
+lm = dspy.LM('ollama_chat/llama3', api_base='http://localhost:11434', api_key='')
+dspy.configure(lm=lm)
+
+
+class GenerateAnswer(dspy.Signature):
+    question = dspy.InputField()
+    previous_draft = dspy.InputField(desc = "The answer from the last attempt", optional=True)
+    critique = dspy.InputField(desc="Feedback from the critic", optional=True)
+    answer = dspy.OutputField(desc="The refined answer with clear math steps")
+
+
+class CritiqueAnswer(dspy.Signature):
+    question = dspy.InputField()
+    draft = dspy.InputField()
+    critique_text = dspy.OutputField(desc="Detailed feedback on what is wrong")
+    score = dspy.OutputField(desc="The score value (e.g., 5)")
+    
+
 class AgentState(TypedDict):
     question: str
     draft: str
     critique: str
     revision_number: int
-    score: int  #score so we can track quality
+    score: int
 
-# --- 2. INITIALIZE MODEL ---
-llm = ChatOllama(model="llama3", temperature=0)
-
-# --- 3. DEFINE NODES ---
 
 def generator_node(state: AgentState):
-    print(f"\n--- GENERATOR (Revision {state['revision_number']}) ---")
+    print(f"Generator (Revision {state['revision_number']})")
 
-    question = state['question']
-    critique = state.get('critique')
-    draft = state.get('draft')
+    generate_module = dspy.Predict(GenerateAnswer)
 
-    if not draft: 
-        prompt = (f"Question: {question}\n"
-                  "Answer cleanly and logically. You MUST show your step-by-step math. "
-                  "State the final answer clearly at the end.")
-    else:
-        prompt = (f"Original question: '{question}'\n"
-                  f"Previous draft: '{draft}'\n"
-                  f"Critique: '{critique}'\n"
-                  "Refine the answer. You MUST show the math steps to prove your answer is correct. "
-                  "Do NOT use conversational filler. Just the math and the answer.")
-    response = llm.invoke([HumanMessage(content=prompt)])
+    pred = generate_module(
+        question=state['question'],
+        previous_draft=state.get('draft') or "",
+        critique=state.get('critique') or ""
+    )
+
+    print(f"Generated length: {len(pred.answer)} chars")
 
     return {
-        "draft": response.content,
+        "draft": pred.answer,
         "revision_number": state['revision_number'] + 1
     }
 
-def critic_node(state: AgentState):
-    print("\n--- CRITIC ---")
 
-    draft = state['draft']
-    question = state['question']
-    
-    prompt = (f"Question: {question}\n"
-              f"Draft Answer: {draft}\n"
-              "Critique this answer. Be extremely harsh. If there is even a slight error, give a low score.\n"
-              "If the reasoning is vague, give a score below 5.\n"
-              "IMPORTANT: After your text critique, give a score from 1-10.\n"
-              "Format your last line exactly like this: SCORE: 10")
-              
-    response = llm.invoke([HumanMessage(content=prompt)])
-    content = response.content
-    
-    # print(f"Critique text: {content}")
-   
+def critic_node(state: AgentState):
+    print("Critic")
+
+    critic_module = dspy.Predict(CritiqueAnswer)
+
+    pred = critic_module(
+        question=state['question'],
+        draft=state['draft']
+    )
+
     score = 0
-    match = re.search(r"SCORE:\D*(\d+)", content)
-    if match:
-        score = int(match.group(1))
-        print(f"Detected Score: {score}/10")
-    else:
-        print("Could not find score in output.")
+
+    try: 
+        match = re.search(r"\d+", pred.score)
+        if match: 
+            score = int(match.group(0))
+    except:
+        print(f"Raw Score Output: {pred.score}")
+        score = 0
+
+    
+    print(f"Critique: {pred.critique_text[:50]}...")
+    print(f"Score: {score}/10")
 
     return {
-        "critique": content, 
+        "critique": pred.critique_text,
         "score": score
     }
-# --- 4. THE LOGIC (Learning Task 3) ---
+
+
 
 def should_continue(state: AgentState):
-    '''
-    Decides if we stop or loop back based on SCORE or ITERATIONS
-    '''
     current_score = state.get('score', 0)
     rev = state.get('revision_number', 0)
 
-    # ### FIXED: The Logic
     if current_score >= 8:
-        print(f"--- DECISION: Good score ({current_score}). Ending early. ---")
+        print(f"DECISION: GOOD SCORE ({current_score}). Ending Early. ---")
         return END
     
     if rev > 3:
-        print("--- DECISION: Too many revisions. Ending. ---")
+        print("DECISION: Too many revisions. Ending. ---")
         return END
-        
-    print(f"--- DECISION: Score {current_score} is too low. Retrying... ---")
-    return "critic" 
+    
+    print(f"DECISION: Score {current_score} is too low. Retrying ---")
+    return "critic"
 
-
-# --- 5. BUILD GRAPH ---
 
 builder = StateGraph(AgentState)
-
 builder.add_node("generator", generator_node)
 builder.add_node("critic", critic_node)
-
 builder.set_entry_point("generator")
 
-# LOGIC FLOW:
-# Generator -> Critic -> Decision -> (Loop back to Generator OR End)
-
-builder.add_edge("generator", "critic") 
+builder.add_edge("generator", "critic")
 builder.add_conditional_edges("critic", should_continue, {
     "critic": "generator",
     END: END
@@ -113,27 +109,21 @@ builder.add_conditional_edges("critic", should_continue, {
 
 graph = builder.compile()
 
-# --- 6. RUN IT ---
-
 initial_state = {
-   "question": "I have 3 apples. I eat 2. Then I buy 5 more. I give 3 to my friend. How many apples do I have?",
+    "question": "I have 3 apples. I eat 2. Then I buy 5 more. I give 3 to my friend. How many apples do I have?",
     "draft": None,
     "critique": None,
     "revision_number": 0,
     "score": 0
 }
 
-print("Starting Darwinian Dialectics...")
-
+print("Starting Darwinian Dialectics (DSPy Powered)...")
 final_state = initial_state.copy()
 
-for event in graph.stream(initial_state, recursion_limit=10):
-    # event is like {'generator': {'draft': '...'}} or {'critic': {'score': ...}}
+for event in graph.stream(initial_state, recursion_limit=15):
     for key, value in event.items():
-     
-        final_state.update(value) 
+        final_state.update(value)
 
 print("\n--- FINAL OUTPUT ---")
 print(f"Final Score: {final_state.get('score')}/10")
-print(f"Final Answer: {final_state.get('draft')}")
-print(f"Total Revisions: {final_state.get('revision_number')}")
+print(f"Final Answer: \n{final_state.get('draft')}")
