@@ -3,6 +3,7 @@ from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, END
 import re
 import dspy
+import os
 
 lm = dspy.LM('ollama_chat/llama3', api_base='http://localhost:11434', api_key='')
 dspy.configure(lm=lm)
@@ -34,6 +35,11 @@ def generator_node(state: AgentState):
     print(f"Generator (Revision {state['revision_number']})")
 
     generate_module = dspy.Predict(GenerateAnswer)
+
+    #loading the evolved brain (if exists)
+    if os.path.exists("evolved_agent.json"):
+        generate_module.load("evolved_agent.json")
+        print("Loaded Evolveed brain json file :)")
 
     pred = generate_module(
         question=state['question'],
@@ -95,35 +101,36 @@ def should_continue(state: AgentState):
     print(f"DECISION: Score {current_score} is too low. Retrying ---")
     return "critic"
 
+if __name__ == "__main__":
 
-builder = StateGraph(AgentState)
-builder.add_node("generator", generator_node)
-builder.add_node("critic", critic_node)
-builder.set_entry_point("generator")
+    builder = StateGraph(AgentState)
+    builder.add_node("generator", generator_node)
+    builder.add_node("critic", critic_node)
+    builder.set_entry_point("generator")
 
-builder.add_edge("generator", "critic")
-builder.add_conditional_edges("critic", should_continue, {
-    "critic": "generator",
-    END: END
-})
+    builder.add_edge("generator", "critic")
+    builder.add_conditional_edges("critic", should_continue, {
+        "critic": "generator",
+        END: END
+    })
 
-graph = builder.compile()
+    graph = builder.compile()
 
-initial_state = {
-    "question": "I have 3 apples. I eat 2. Then I buy 5 more. I give 3 to my friend. How many apples do I have?",
-    "draft": None,
-    "critique": None,
-    "revision_number": 0,
-    "score": 0
-}
+    initial_state = {
+        "question": "I have 3 apples. I eat 2. Then I buy 5 more. I give 3 to my friend. How many apples do I have?",
+        "draft": None,
+        "critique": None,
+        "revision_number": 0,
+        "score": 0
+    }
 
-print("Starting Darwinian Dialectics (DSPy Powered)...")
-final_state = initial_state.copy()
+    print("Starting Darwinian Dialectics (DSPy Powered)...")
+    final_state = initial_state.copy()
 
-for event in graph.stream(initial_state, recursion_limit=15):
-    for key, value in event.items():
-        final_state.update(value)
+    for event in graph.stream(initial_state, recursion_limit=15):
+        for key, value in event.items():
+            final_state.update(value)
 
-print("\n--- FINAL OUTPUT ---")
-print(f"Final Score: {final_state.get('score')}/10")
-print(f"Final Answer: \n{final_state.get('draft')}")
+    print("\n--- FINAL OUTPUT ---")
+    print(f"Final Score: {final_state.get('score')}/10")
+    print(f"Final Answer: \n{final_state.get('draft')}")

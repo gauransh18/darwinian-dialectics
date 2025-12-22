@@ -1,0 +1,55 @@
+{
+  "traces": [],
+  "train": [],
+  "demos": [
+    {
+      "augmented": true,
+      "question": "I have 3 apples. I eat 2, Buy5, give 3, How many?",
+      "answer": "0 (since the operation \"Buy5\" is invalid)"
+    },
+    {
+      "augmented": true,
+      "question": "What is heavier: a pound of lead or a pound of feathers?",
+      "answer": "They are equal. Both a pound of lead and a pound of feathers weigh one pound."
+    },
+    {
+      "augmented": true,
+      "question": "Sally has 3 brothers. Each brother has 2 sisters. How many sisters does Sally have?",
+      "answer": "5"
+    },
+    {
+      "augmented": true,
+      "question": "How many times does the letter 'r' appear in the word 'Strawberry'?",
+      "answer": "4"
+    }
+  ],
+  "signature": {
+    "instructions": "Given the fields `question`, `previous_draft`, `critique`, produce the fields `answer`.",
+    "fields": [
+      {
+        "prefix": "Question:",
+        "description": "${question}"
+      },
+      {
+        "prefix": "Previous Draft:",
+        "description": "The answer from the last attempt"
+      },
+      {
+        "prefix": "Critique:",
+        "description": "Feedback from the critic"
+      },
+      {
+        "prefix": "Answer:",
+        "description": "The refined answer with clear math steps"
+      }
+    ]
+  },
+  "lm": null,
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.13",
+      "dspy": "3.0.4",
+      "cloudpickle": "3.1"
+    }
+  }
+}

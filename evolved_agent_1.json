@@ -1,0 +1,51 @@
+{
+  "traces": [],
+  "train": [],
+  "demos": [
+    {
+      "question": "If you pass the person in 2nd place in a race, what place are you in?",
+      "answer": "2nd"
+    },
+    {
+      "question": "How many times does the letter 'r' appear in the word 'Strawberry'?",
+      "answer": "3"
+    },
+    {
+      "question": "Sally has 3 brothers. Each brother has 2 sisters. How many sisters does Sally have?",
+      "answer": "1"
+    },
+    {
+      "question": "What is heavier: a pound of lead or a pound of feathers?",
+      "answer": "They weigh the same"
+    }
+  ],
+  "signature": {
+    "instructions": "Given the fields `question`, `previous_draft`, `critique`, produce the fields `answer`.",
+    "fields": [
+      {
+        "prefix": "Question:",
+        "description": "${question}"
+      },
+      {
+        "prefix": "Previous Draft:",
+        "description": "The answer from the last attempt"
+      },
+      {
+        "prefix": "Critique:",
+        "description": "Feedback from the critic"
+      },
+      {
+        "prefix": "Answer:",
+        "description": "The refined answer with clear math steps"
+      }
+    ]
+  },
+  "lm": null,
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.13",
+      "dspy": "3.0.4",
+      "cloudpickle": "3.1"
+    }
+  }
+}
