@@ -1,13 +1,22 @@
 import chainlit as cl
 from main import builder  # Importing your existing Graph
-from memory import save_memory, get_relevant_examples
+from vector_memory import save_memory, get_relevant_examples
+import dspy
 
-# Global state to track the current conversation for "Teaching Mode"
+# --- GLOBAL STATE ---
 user_session = {"last_question": None, "last_draft": None}
+
+# --- REPAIR MODULE (New!) ---
+# This allows the AI to fix itself based on your hint
+class Repair(dspy.Signature):
+    """Rewrite the draft based on the user's feedback/correction."""
+    original_draft = dspy.InputField()
+    user_feedback = dspy.InputField()
+    corrected_draft = dspy.OutputField(desc="The corrected text, ready to be saved as the ground truth.")
 
 @cl.on_chat_start
 async def start():
-    await cl.Message(content="🧠 **Darwinian Agent Ready.**\nI learn from my mistakes. If I get something wrong, click 'Bad' to teach me.").send()
+    await cl.Message(content="🧠 **Darwinian Agent Ready.**\nI learn from my mistakes. If I'm wrong, just give me a hint!").send()
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -18,7 +27,6 @@ async def main(message: cl.Message):
     augmented_question = message.content
     if past_lessons:
         augmented_question += f"\n\n[IMPORTANT: Use these past lessons to guide your answer]\n{past_lessons}"
-        # Send a quiet notification that memory was used
         await cl.Message(content=f"💡 *Recalled past lessons...*", author="System").send()
 
     # 3. PREPARE STATE
@@ -30,48 +38,36 @@ async def main(message: cl.Message):
         "critique": ""
     }
 
-    # 4. RUN LANGGRAPH (With Clean UI)
+    # 4. RUN LANGGRAPH
     final_draft = ""
-    
-    # Create a parent step to group the "Thinking" logs
-    # We remove 'collapsed=True' to prevent the crash. 
-    # The parent step will naturally contain the noise.
     async with cl.Step(name="Thinking Process...", type="run") as parent_step:
-        
         async for event in builder.compile().astream(initial_state, limit={"recursion_limit": 15}):
             
-            # Visualize Generator
             if "generator" in event:
                 state = event["generator"]
                 draft = state["draft"]
                 rev = state["revision_number"]
                 final_draft = draft 
-                
                 async with cl.Step(name=f"Generator (Rev {rev})", type="run") as step:
                     step.output = draft
 
-            # Visualize Critic
             elif "critic" in event:
                 state = event["critic"]
                 score = state["score"]
                 icon = "✅" if score >= 8 else "❌"
-                
                 async with cl.Step(name=f"Critic (Score: {score}) {icon}", type="tool") as step:
                     step.output = state["critique"]
-        
         parent_step.output = "Done."
 
     # 5. SAVE CONTEXT
     user_session["last_question"] = message.content 
     user_session["last_draft"] = final_draft
 
-    # 6. SHOW RESULT WITH ACTIONS
+    # 6. SHOW RESULT
     actions = [
         cl.Action(name="good", payload={"value": "good"}, label="✅ Good"),
-        cl.Action(name="bad", payload={"value": "bad"}, label="❌ Bad (Teach Me)")
+        cl.Action(name="bad", payload={"value": "bad"}, label="❌ Bad (Fix it)")
     ]
-    
-    # This is the "Direct Response" you wanted
     await cl.Message(content=f"{final_draft}", actions=actions).send()
 
 @cl.action_callback("good")
@@ -81,7 +77,21 @@ async def on_good(action: cl.Action):
 
 @cl.action_callback("bad")
 async def on_bad(action: cl.Action):
-    res = await cl.AskUserMessage(content="I'm sorry! 😔 Please type the **Correct Answer** so I can learn.").send()
+    # 1. Ask for the hint (Low effort for user)
+    res = await cl.AskUserMessage(content="My apologies! 😔 **What did I get wrong?** (Just give me a hint, and I'll fix the answer)").send()
+    
     if res:
-        count = save_memory(user_session["last_question"], res['output'])
-        await cl.Message(content=f"🎓 **Learned!** Brain updated. (Total Memories: {count})").send()
+        feedback = res['output']
+        
+        # 2. Run the Repair Module (The AI does the heavy lifting)
+        await cl.Message(content="🔧 **Repairing...** Applying your feedback...").send()
+        
+        repair_module = dspy.Predict(Repair)
+        pred = repair_module(original_draft=user_session["last_draft"], user_feedback=feedback)
+        fixed_answer = pred.corrected_draft
+        
+        # 3. Save the FIXED version to memory
+        count = save_memory(user_session["last_question"], fixed_answer)
+        
+        # 4. Show the user what we saved
+        await cl.Message(content=f"🎓 **Learned!** I have saved this corrected version for next time:\n\n> {fixed_answer}").send()

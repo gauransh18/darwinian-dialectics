@@ -11,16 +11,15 @@ dspy.configure(lm=lm)
 
 class GenerateAnswer(dspy.Signature):
     question = dspy.InputField()
-    previous_draft = dspy.InputField(desc = "The answer from the last attempt", optional=True)
+    previous_draft = dspy.InputField(desc="The answer from the last attempt", optional=True)
     critique = dspy.InputField(desc="Feedback from the critic", optional=True)
-    answer = dspy.OutputField(desc="The refined answer with clear math steps")
-
+    answer = dspy.OutputField(desc="A detailed, helpful, and accurate response.")
 
 class CritiqueAnswer(dspy.Signature):
     question = dspy.InputField()
     draft = dspy.InputField()
-    critique_text = dspy.OutputField(desc="Detailed feedback on what is wrong")
-    score = dspy.OutputField(desc="The score value (e.g., 5)")
+    critique_text = dspy.OutputField(desc="Specific feedback on accuracy, logic, or tone.")
+    score = dspy.OutputField(desc="The score value (0-10)")
     
 
 class AgentState(TypedDict):
