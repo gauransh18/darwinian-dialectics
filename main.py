@@ -101,21 +101,22 @@ def should_continue(state: AgentState):
     print(f"DECISION: Score {current_score} is too low. Retrying ---")
     return "critic"
 
+builder = StateGraph(AgentState)
+builder.add_node("generator", generator_node)
+builder.add_node("critic", critic_node)
+builder.set_entry_point("generator")
+
+builder.add_edge("generator", "critic")
+builder.add_conditional_edges("critic", should_continue, {
+    "critic": "generator",
+    END: END
+})
+
+graph = builder.compile()
+
 if __name__ == "__main__":
 
-    builder = StateGraph(AgentState)
-    builder.add_node("generator", generator_node)
-    builder.add_node("critic", critic_node)
-    builder.set_entry_point("generator")
-
-    builder.add_edge("generator", "critic")
-    builder.add_conditional_edges("critic", should_continue, {
-        "critic": "generator",
-        END: END
-    })
-
-    graph = builder.compile()
-
+   
     initial_state = {
         "question": "I have 3 apples. I eat 2. Then I buy 5 more. I give 3 to my friend. How many apples do I have?",
         "draft": None,
