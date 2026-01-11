@@ -25,23 +25,21 @@ class AgentState(TypedDict):
     history: str          # Chat context
     current_agent: str    # Which agent is currently active?
     reasoning: str        # Why was this agent chosen?
+    plan: str             # The Architect's plan
     draft: str            # The draft code waiting for audit
     final_output: str     # The final response to the user
 
 # --- NODES (The Council Members) ---
 
 def routing_node(state: AgentState):
-    """
-    The Orchestrator Node.
-    Analyzes the input and decides which expert to call.
-    """
-    print(f"\n🧠 [Router] Analyzing request: {state['input'][:50]}...")
+    print(f"\n🧠 [Architect] Designing Blueprint...")
 
-    agent, reason = orchestrator.route(state["input"], state.get("history", ""))
-    
+    agent, reason, plan = orchestrator.route(state["input"], state.get("history", ""))
+
     return {
         "current_agent": agent, 
-        "reasoning": reason
+        "reasoning": reason,
+        "plan": plan
     }
 
 def ingestion_node(state: AgentState):
@@ -53,14 +51,10 @@ def ingestion_node(state: AgentState):
     return {"final_output": f"**Context Analysis (Gemini 2.0):**\n\n{result}"}
 
 def coder_node(state: AgentState):
-    """
-    The Coder Node (Devstral/DeepSeek).
-    Generates a draft but does NOT mark it as final yet.
-    """
-    print(f"💻 [Coder] Engineering solution...")
-    code_solution = coder.write_code(state["input"])
-    
-    # Save to 'draft' so the Auditor can pick it up next
+    print(f"💻 [Coder] following Blueprint...")
+
+    code_solution = coder.write_code(state["input"], state["plan"])
+
     return {"draft": code_solution, "final_output": ""}
 
 def general_node(state: AgentState):

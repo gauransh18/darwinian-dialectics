@@ -2,7 +2,7 @@ from utils.openrouter_client import call_openrouter
 
 class AuditorAgent:
     def __init__(self):
-        self.model = "deepseek/deepseek-v3.2" 
+        self.model = "mistralai/devstral-2512:free" 
 
     def audit(self, content, context="user_input"):
         """
@@ -22,7 +22,7 @@ class AuditorAgent:
             4. If BAD: Rewrite the code with fixes and explain the error.
             """
         else:
-            # Default: Auditing user input (e.g. "Check this snippet for bugs")
+            # Default: Auditing user input
             system_prompt = """
             You are a Lead Security Researcher.
             Review the user's provided code/text for logical fallacies, security risks, or bugs.
