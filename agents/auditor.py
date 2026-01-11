@@ -1,8 +1,9 @@
 from utils.openrouter_client import call_openrouter
 
 class AuditorAgent:
-    def __init__(self):
-        self.model = "mistralai/devstral-2512:free" 
+    def __init__(self, model=None, api_key=None):
+        self.model = model or "mistralai/devstral-2512:free"
+        self.api_key = api_key
 
     def audit(self, content, context="user_input"):
         """
@@ -34,7 +35,7 @@ class AuditorAgent:
             {"role": "user", "content": f"CONTENT TO AUDIT:\n\n{content}"}
         ]
         
-        response = call_openrouter(self.model, messages)
+        response = call_openrouter(self.model, messages, api_key=self.api_key)
         
         if response:
             return response['choices'][0]['message']['content']

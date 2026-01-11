@@ -2,8 +2,9 @@ import json
 from utils.openrouter_client import call_openrouter
 
 class Orchestrator:
-    def __init__(self):
-        self.model = "xiaomi/mimo-v2-flash:free"
+    def __init__(self, model=None, api_key=None):
+        self.model = model or "xiaomi/mimo-v2-flash:free"
+        self.api_key = api_key
 
     def route(self, user_input, chat_history=""):
         print(f"🤔 MiMo is Architecting: {user_input[:50]}...")
@@ -36,7 +37,7 @@ class Orchestrator:
         ]
 
         # Enable reasoning to let MiMo think through the architecture first
-        response = call_openrouter(self.model, messages, enable_reasoning=True)
+        response = call_openrouter(self.model, messages, enable_reasoning=True, api_key=self.api_key)
         
         if not response:
             return "general", "Error", "No plan."

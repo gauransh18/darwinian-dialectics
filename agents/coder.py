@@ -1,8 +1,9 @@
 from utils.openrouter_client import call_openrouter
 
 class CoderAgent:
-    def __init__(self):
-        self.model = "deepseek/deepseek-v3.2" 
+    def __init__(self, model=None, api_key=None):
+        self.model = model or "deepseek/deepseek-v3.2"
+        self.api_key = api_key
 
     def write_code(self, user_request, plan):
         print(f"💻 DeepSeek is Engineering based on Plan...")
@@ -26,7 +27,7 @@ class CoderAgent:
             {"role": "user", "content": f"Request: {user_request}"}
         ]
         
-        response = call_openrouter(self.model, messages)
+        response = call_openrouter(self.model, messages, api_key=self.api_key)
         
         if response:
             return response['choices'][0]['message']['content']

@@ -1,8 +1,9 @@
 from utils.openrouter_client import call_openrouter
 
 class IngestionAgent:
-    def __init__(self):
-        self.model = "google/gemini-2.0-flash-exp:free"
+    def __init__(self, model=None, api_key=None):
+        self.model = model or "google/gemini-2.0-flash-exp:free"
+        self.api_key = api_key
 
     def process(self, user_input):
         print("📚 Gemini is reading...")
@@ -18,7 +19,7 @@ class IngestionAgent:
             {"role": "user", "content": user_input}
         ]
         
-        response = call_openrouter(self.model, messages)
+        response = call_openrouter(self.model, messages, api_key=self.api_key)
         
         if response:
             return response['choices'][0]['message']['content']
