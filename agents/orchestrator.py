@@ -3,8 +3,6 @@ from utils.openrouter_client import call_openrouter
 
 class Orchestrator:
     def __init__(self):
-        # We use Xiaomi MiMo because it supports "Reasoning" (Chain of Thought)
-        # This makes it excellent at planning before deciding.
         self.model = "xiaomi/mimo-v2-flash:free"
 
     def route(self, user_input, chat_history=""):
@@ -34,7 +32,6 @@ class Orchestrator:
             {"role": "user", "content": f"History: {chat_history}\n\nCurrent Request: {user_input}"}
         ]
 
-        # Enable reasoning! This is the "Ghost" part of the architect.
         response = call_openrouter(self.model, messages, enable_reasoning=True)
         
         if not response:
@@ -42,9 +39,7 @@ class Orchestrator:
 
         content = response['choices'][0]['message']['content']
         
-        # Parse the JSON output
         try:
-            # Clean potential markdown code blocks (```json ... ```)
             cleaned = content.replace("```json", "").replace("```", "").strip()
             decision = json.loads(cleaned)
             

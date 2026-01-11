@@ -2,7 +2,6 @@ from utils.openrouter_client import call_openrouter
 
 class IngestionAgent:
     def __init__(self):
-        # Gemini 2.0 Flash - The Context King (1M Token Window)
         self.model = "google/gemini-2.0-flash-exp:free"
 
     def process(self, user_input):

@@ -16,7 +16,6 @@ def call_openrouter(model, messages, enable_reasoning=False):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        # OpenRouter requires these for free tier rankings
         "HTTP-Referer": "http://localhost:8000", 
         "X-Title": "Darwinian Dialectics Agent",
     }
@@ -24,10 +23,9 @@ def call_openrouter(model, messages, enable_reasoning=False):
     payload = {
         "model": model,
         "messages": messages,
-        "temperature": 0.2, # Low temp for routing/logic
+        "temperature": 0.2,
     }
     
-    # Add reasoning flag if requested (Specific to Xiaomi/DeepSeek models)
     if enable_reasoning:
         payload["reasoning"] = {"enabled": True}
         
