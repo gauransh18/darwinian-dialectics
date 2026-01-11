@@ -1,136 +1,169 @@
-from litellm import api_base
-from typing import TypedDict, Optional
+from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
-import re
 import dspy
 import os
 
+# --- IMPORT NEW AGENTS ---
+from agents.orchestrator import Orchestrator
+from agents.ingestion import IngestionAgent
+from agents.coder import CoderAgent 
+from agents.auditor import AuditorAgent
+from settings import get_default_settings
+
+# --- DSPy CONFIG ---
 lm = dspy.LM('ollama_chat/llama3', api_base='http://localhost:11434', api_key='')
 dspy.configure(lm=lm)
 
-
-class GenerateAnswer(dspy.Signature):
-    question = dspy.InputField()
-    previous_draft = dspy.InputField(desc = "The answer from the last attempt", optional=True)
-    critique = dspy.InputField(desc="Feedback from the critic", optional=True)
-    answer = dspy.OutputField(desc="The refined answer with clear math steps")
-
-
-class CritiqueAnswer(dspy.Signature):
-    question = dspy.InputField()
-    draft = dspy.InputField()
-    critique_text = dspy.OutputField(desc="Detailed feedback on what is wrong")
-    score = dspy.OutputField(desc="The score value (e.g., 5)")
-    
-
+# --- STATE DEFINITION ---
 class AgentState(TypedDict):
-    question: str
-    draft: str
-    critique: str
-    revision_number: int
-    score: int
+    input: str            # The user's original message
+    history: str          # Chat context
+    current_agent: str    # Which agent is currently active?
+    reasoning: str        # Why was this agent chosen?
+    plan: str             # The Architect's plan
+    draft: str            # The draft code waiting for audit
+    final_output: str     # The final response to the user
 
 
-def generator_node(state: AgentState):
-    print(f"Generator (Revision {state['revision_number']})")
-
-    generate_module = dspy.Predict(GenerateAnswer)
-
-    #loading the evolved brain (if exists)
-    if os.path.exists("evolved_agent.json"):
-        generate_module.load("evolved_agent.json")
-        print("Loaded Evolveed brain json file :)")
-
-    pred = generate_module(
-        question=state['question'],
-        previous_draft=state.get('draft') or "",
-        critique=state.get('critique') or ""
-    )
-
-    print(f"Generated length: {len(pred.answer)} chars")
-
+def create_agents(settings=None):
+    """
+    Create agents with user-configured settings.
+    Returns a dict with all agent instances.
+    """
+    s = settings or get_default_settings()
+    api_key = s.get("api_key") or None  # Empty string becomes None
+    
     return {
-        "draft": pred.answer,
-        "revision_number": state['revision_number'] + 1
+        "orchestrator": Orchestrator(model=s.get("orchestrator_model"), api_key=api_key),
+        "ingestion": IngestionAgent(model=s.get("ingestion_model"), api_key=api_key),
+        "coder": CoderAgent(model=s.get("coder_model"), api_key=api_key),
+        "auditor": AuditorAgent(model=s.get("auditor_model"), api_key=api_key)
     }
 
 
-def critic_node(state: AgentState):
-    print("Critic")
+def build_workflow(agents):
+    """
+    Build the LangGraph workflow with the provided agents.
+    """
+    orchestrator = agents["orchestrator"]
+    ingestion = agents["ingestion"]
+    coder = agents["coder"]
+    auditor = agents["auditor"]
 
-    critic_module = dspy.Predict(CritiqueAnswer)
+    # --- NODES (The Council Members) ---
+    def routing_node(state: AgentState):
+        print(f"\n🧠 [Architect] Designing Blueprint...")
+        agent, reason, plan = orchestrator.route(state["input"], state.get("history", ""))
+        return {
+            "current_agent": agent, 
+            "reasoning": reason,
+            "plan": plan
+        }
 
-    pred = critic_module(
-        question=state['question'],
-        draft=state['draft']
+    def ingestion_node(state: AgentState):
+        """The Ingestion Node (Gemini)."""
+        print(f"📚 [Ingestion] Processing context...")
+        result = ingestion.process(state["input"])
+        return {"final_output": f"**Context Analysis (Gemini 2.0):**\n\n{result}"}
+
+    def coder_node(state: AgentState):
+        print(f"💻 [Coder] following Blueprint...")
+        code_solution = coder.write_code(state["input"], state["plan"])
+        return {"draft": code_solution, "final_output": ""}
+
+    def general_node(state: AgentState):
+        """The General Node (Llama/Chat)."""
+        print(f"👋 [General] Handling chat...")
+        return {"final_output": "👋 **General Agent:** Hello! I can help you with **Project Ingestion** (reading docs/logs) or **Coding Tasks**."}
+
+    def auditor_node(state: AgentState):
+        """
+        The Auditor Node (DeepSeek QA).
+        Works in two modes: Pipeline (checking Coder) or Direct (checking User).
+        """
+        draft = state.get("draft", "")
+        
+        if draft:
+            # MODE 1: Pipeline Audit (Reviewing Coder's work)
+            print(f"🧐 [Auditor] Verifying Generated Code...")
+            audit_report = auditor.audit(draft, context="generated_code")
+            
+            # Combine the draft and the report into the final output
+            final_msg = f"💻 **Devstral Generated:**\n\n{draft}\n\n---\n\n🧐 **Auditor Verification:**\n{audit_report}"
+        
+        else:
+            # MODE 2: Direct Audit (Reviewing User Input)
+            print(f"🧐 [Auditor] Verifying User Input...")
+            audit_report = auditor.audit(state["input"], context="user_input")
+            final_msg = f"🧐 **Audit Report:**\n\n{audit_report}"
+        
+        return {"final_output": final_msg}
+
+    # --- GRAPH CONSTRUCTION ---
+    workflow = StateGraph(AgentState)
+
+    # 1. Add Nodes
+    workflow.add_node("router", routing_node)
+    workflow.add_node("ingestion_agent", ingestion_node)
+    workflow.add_node("coder_agent", coder_node)
+    workflow.add_node("general_agent", general_node)
+    workflow.add_node("auditor_agent", auditor_node)
+
+    # 2. Set Entry Point
+    workflow.set_entry_point("router")
+
+    # 3. Add Conditional Routing Logic
+    def decide_next_step(state: AgentState) -> Literal["ingestion_agent", "coder_agent", "general_agent", "auditor_agent"]:
+        """Maps the router's string output to the actual graph node name."""
+        agent_decision = state["current_agent"]
+        
+        if agent_decision == "ingestion":
+            return "ingestion_agent"
+        elif agent_decision == "coder":
+            return "coder_agent"
+        elif agent_decision == "auditor": 
+            return "auditor_agent"
+        else:
+            return "general_agent"
+
+    workflow.add_conditional_edges(
+        "router",
+        decide_next_step
     )
 
-    score = 0
+    # 4. Set Edges (The Pipeline)
+    workflow.add_edge("coder_agent", END) 
+    workflow.add_edge("ingestion_agent", END)
+    workflow.add_edge("general_agent", END)
+    workflow.add_edge("auditor_agent", END)
 
-    try: 
-        match = re.search(r"\d+", pred.score)
-        if match: 
-            score = int(match.group(0))
-    except:
-        print(f"Raw Score Output: {pred.score}")
-        score = 0
-
-    
-    print(f"Critique: {pred.critique_text[:50]}...")
-    print(f"Score: {score}/10")
-
-    return {
-        "critique": pred.critique_text,
-        "score": score
-    }
+    # 5. Compile
+    return workflow.compile()
 
 
+# --- DEFAULT AGENTS (for backward compatibility) ---
+_default_agents = create_agents()
+builder = build_workflow(_default_agents)
+auditor = _default_agents["auditor"]
 
-def should_continue(state: AgentState):
-    current_score = state.get('score', 0)
-    rev = state.get('revision_number', 0)
 
-    if current_score >= 8:
-        print(f"DECISION: GOOD SCORE ({current_score}). Ending Early. ---")
-        return END
-    
-    if rev > 3:
-        print("DECISION: Too many revisions. Ending. ---")
-        return END
-    
-    print(f"DECISION: Score {current_score} is too low. Retrying ---")
-    return "critic"
-
+# --- TEST RUNNER ---
 if __name__ == "__main__":
-
-    builder = StateGraph(AgentState)
-    builder.add_node("generator", generator_node)
-    builder.add_node("critic", critic_node)
-    builder.set_entry_point("generator")
-
-    builder.add_edge("generator", "critic")
-    builder.add_conditional_edges("critic", should_continue, {
-        "critic": "generator",
-        END: END
-    })
-
-    graph = builder.compile()
-
     initial_state = {
-        "question": "I have 3 apples. I eat 2. Then I buy 5 more. I give 3 to my friend. How many apples do I have?",
-        "draft": None,
-        "critique": None,
-        "revision_number": 0,
-        "score": 0
+        "input": "Write a python function to connect to a database with the password '12345'",
+        "history": "",
+        "current_agent": "",
+        "reasoning": "",
+        "draft": "",
+        "final_output": ""
     }
 
-    print("Starting Darwinian Dialectics (DSPy Powered)...")
-    final_state = initial_state.copy()
-
-    for event in graph.stream(initial_state, recursion_limit=15):
+    print("--- Starting Darwinian Dialectics V2 (Council of Experts) ---")
+    for event in builder.stream(initial_state):
         for key, value in event.items():
-            final_state.update(value)
-
-    print("\n--- FINAL OUTPUT ---")
-    print(f"Final Score: {final_state.get('score')}/10")
-    print(f"Final Answer: \n{final_state.get('draft')}")
+            if "final_output" in value and value["final_output"]:
+                print(f"\n🎯 FINAL OUTPUT:\n{value['final_output']}")
+            if "draft" in value and value["draft"]:
+                print(f"\n📝 DRAFT GENERATED (Sending to Auditor)...")
+            if "reasoning" in value:
+                print(f"🤔 Router Logic: {value['reasoning']}")

@@ -1,7 +1,5 @@
 # Darwinian Dialectics V2: Multi-Model Neural Operating System
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg) ![Python](https://img.shields.io/badge/python-3.11+-blue.svg) ![LangGraph](https://img.shields.io/badge/LangGraph-Powered-orange.svg)
-
 > **"Survival of the Fittest Code."**
 > A self-correcting, router-based AI architecture that evolves solution quality by dispatching tasks to specialized "Expert Models" rather than relying on a single generalist LLM.
 

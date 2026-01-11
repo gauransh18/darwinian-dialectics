@@ -1,0 +1,14 @@
+[
+    {
+        "question": "what is 2+2",
+        "answer": "The correct calculation is indeed 2+2=4. I will make sure to provide clear math steps in my future responses."
+    },
+    {
+        "question": "what is 4+4",
+        "answer": "The correct calculation is simply 4 + 4 = 8. I can simplify this by counting up four groups of 1s: 1+1+1+1=8."
+    },
+    {
+        "question": "what is 6+6",
+        "answer": "To find the correct calculation, I will count up six groups of 1s: 1+1+1+1+1+1=6. Then, I simply add another 6 to get my final answer: 1+1+1+1+1+1+1+1+1+1+1+1 = 12."
+    }
+]
