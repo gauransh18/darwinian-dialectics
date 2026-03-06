@@ -1,13 +1,14 @@
 import json
+import re
 from utils.openrouter_client import call_openrouter
 
 class Orchestrator:
     def __init__(self, model=None, api_key=None):
-        self.model = model or "xiaomi/mimo-v2-flash:free"
+        self.model = model or "z-ai/glm-4.5-air:free"
         self.api_key = api_key
 
     def route(self, user_input, chat_history=""):
-        print(f"🤔 MiMo is Architecting: {user_input[:50]}...")
+        print(f"🤔 Architect is routing: {user_input[:50]}...")
         
         system_prompt = """
         You are the Chief Technical Architect.
@@ -36,8 +37,15 @@ class Orchestrator:
             {"role": "user", "content": f"History: {chat_history}\n\nCurrent Request: {user_input}"}
         ]
 
-        # Enable reasoning to let MiMo think through the architecture first
-        response = call_openrouter(self.model, messages, enable_reasoning=True, api_key=self.api_key)
+        # Enable reasoning to let the architect think through the architecture first
+        response = call_openrouter(
+            self.model,
+            messages,
+            enable_reasoning=True,
+            api_key=self.api_key,
+            response_format={"type": "json_object"},
+            plugins=["response-healing"],
+        )
         
         if not response:
             return "general", "Error", "No plan."
@@ -56,4 +64,16 @@ class Orchestrator:
             return agent, reason, plan
             
         except json.JSONDecodeError:
+            # Fallback: extract the first JSON object if the model wrapped it.
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+            if match:
+                try:
+                    decision = json.loads(match.group(0))
+                    agent = decision.get("next_agent", "general")
+                    reason = decision.get("reasoning", "No reasoning.")
+                    plan = decision.get("plan", "Proceed with standard execution.")
+                    print(f"👉 Architect's Plan (extracted): {plan[:100]}...")
+                    return agent, reason, plan
+                except json.JSONDecodeError:
+                    pass
             return "general", "JSON Error", "Failed to parse plan."

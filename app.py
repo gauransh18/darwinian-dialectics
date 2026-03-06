@@ -56,6 +56,11 @@ async def start():
                 label="🧐 Auditor Model",
                 initial=defaults["auditor_model"],
             ),
+            TextInput(
+                id="general_model",
+                label="💬 General Model",
+                initial=defaults["general_model"],
+            ),
         ]
     ).send()
     
@@ -66,6 +71,7 @@ async def start():
         "ingestion_model": settings.get("ingestion_model", defaults["ingestion_model"]),
         "coder_model": settings.get("coder_model", defaults["coder_model"]),
         "auditor_model": settings.get("auditor_model", defaults["auditor_model"]),
+        "general_model": settings.get("general_model", defaults["general_model"]),
     })
     
     # Build workflow with current settings
@@ -90,6 +96,7 @@ async def settings_update(settings):
         "ingestion_model": settings.get("ingestion_model", defaults["ingestion_model"]),
         "coder_model": settings.get("coder_model", defaults["coder_model"]),
         "auditor_model": settings.get("auditor_model", defaults["auditor_model"]),
+        "general_model": settings.get("general_model", defaults["general_model"]),
     }
     cl.user_session.set("user_settings", user_settings)
     
@@ -142,7 +149,7 @@ async def main(message: cl.Message):
                 if node_name == "router":
                     reasoning = state.get("reasoning", "No reasoning.")
                     agent = state.get("current_agent", "Unknown")
-                    async with cl.Step(name=f"Orchestrator (MiMo)", type="tool") as step:
+                    async with cl.Step(name="Orchestrator (Architect)", type="tool") as step:
                         step.input = initial_state["input"]
                         step.output = f"👉 Decision: {agent.upper()}\n💭 Logic: {reasoning}"
 
@@ -152,7 +159,7 @@ async def main(message: cl.Message):
                     # --- FIX STARTS HERE ---
                     # Check for Draft (Coder) FIRST
                     if "draft" in state and state["draft"]:
-                        final_response = f"💻 **Devstral Generated:**\n\n{state['draft']}"
+                        final_response = f"💻 **Engineer Generated:**\n\n{state['draft']}"
                         user_session["last_output"] = state["draft"] 
                         is_code_generated = True
 

@@ -3,10 +3,11 @@
 # Default model configurations
 DEFAULT_SETTINGS = {
     "api_key": "",  # Empty = use .env OPENROUTER_API_KEY
-    "orchestrator_model": "xiaomi/mimo-v2-flash:free",
-    "ingestion_model": "google/gemini-2.0-flash-exp:free",
-    "coder_model": "deepseek/deepseek-v3.2",
-    "auditor_model": "mistralai/devstral-2512:free"
+    "orchestrator_model": "z-ai/glm-4.5-air:free",
+    "ingestion_model": "arcee-ai/trinity-large-preview:free",
+    "coder_model": "stepfun/step-3.5-flash:free",
+    "auditor_model": "nvidia/nemotron-3-nano-30b-a3b:free",
+    "general_model": "arcee-ai/trinity-large-preview:free"
 }
 
 

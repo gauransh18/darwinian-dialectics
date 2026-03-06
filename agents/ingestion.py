@@ -6,7 +6,7 @@ class IngestionAgent:
         self.api_key = api_key
 
     def process(self, user_input):
-        print("📚 Gemini is reading...")
+        print("📚 Ingestion agent is reading...")
         
         system_prompt = """
         You are the 'Deep Context' agent. 

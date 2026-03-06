@@ -8,6 +8,7 @@ from agents.orchestrator import Orchestrator
 from agents.ingestion import IngestionAgent
 from agents.coder import CoderAgent 
 from agents.auditor import AuditorAgent
+from agents.general import GeneralAgent
 from settings import get_default_settings
 
 # --- DSPy CONFIG ---
@@ -37,7 +38,8 @@ def create_agents(settings=None):
         "orchestrator": Orchestrator(model=s.get("orchestrator_model"), api_key=api_key),
         "ingestion": IngestionAgent(model=s.get("ingestion_model"), api_key=api_key),
         "coder": CoderAgent(model=s.get("coder_model"), api_key=api_key),
-        "auditor": AuditorAgent(model=s.get("auditor_model"), api_key=api_key)
+        "auditor": AuditorAgent(model=s.get("auditor_model"), api_key=api_key),
+        "general": GeneralAgent(model=s.get("general_model") or s.get("orchestrator_model"), api_key=api_key),
     }
 
 
@@ -49,6 +51,7 @@ def build_workflow(agents):
     ingestion = agents["ingestion"]
     coder = agents["coder"]
     auditor = agents["auditor"]
+    general = agents["general"]
 
     # --- NODES (The Council Members) ---
     def routing_node(state: AgentState):
@@ -64,7 +67,7 @@ def build_workflow(agents):
         """The Ingestion Node (Gemini)."""
         print(f"📚 [Ingestion] Processing context...")
         result = ingestion.process(state["input"])
-        return {"final_output": f"**Context Analysis (Gemini 2.0):**\n\n{result}"}
+        return {"final_output": f"**Context Analysis (Ingestion Agent):**\n\n{result}"}
 
     def coder_node(state: AgentState):
         print(f"💻 [Coder] following Blueprint...")
@@ -74,7 +77,8 @@ def build_workflow(agents):
     def general_node(state: AgentState):
         """The General Node (Llama/Chat)."""
         print(f"👋 [General] Handling chat...")
-        return {"final_output": "👋 **General Agent:** Hello! I can help you with **Project Ingestion** (reading docs/logs) or **Coding Tasks**."}
+        reply = general.chat(state["input"], state.get("history", ""))
+        return {"final_output": reply}
 
     def auditor_node(state: AgentState):
         """
@@ -89,7 +93,7 @@ def build_workflow(agents):
             audit_report = auditor.audit(draft, context="generated_code")
             
             # Combine the draft and the report into the final output
-            final_msg = f"💻 **Devstral Generated:**\n\n{draft}\n\n---\n\n🧐 **Auditor Verification:**\n{audit_report}"
+            final_msg = f"💻 **Engineer Generated:**\n\n{draft}\n\n---\n\n🧐 **Auditor Verification:**\n{audit_report}"
         
         else:
             # MODE 2: Direct Audit (Reviewing User Input)

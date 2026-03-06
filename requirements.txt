@@ -1,3 +1,6 @@
 dspy-ai
 langgraph
 langchain
+chainlit
+chromadb
+sentence_transformers

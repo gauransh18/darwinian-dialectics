@@ -6,7 +6,7 @@ class CoderAgent:
         self.api_key = api_key
 
     def write_code(self, user_request, plan):
-        print(f"💻 DeepSeek is Engineering based on Plan...")
+        print(f"💻 Engineer is implementing the plan...")
         
         system_prompt = f"""
         You are an Elite Software Engineer (Devstral Profile).
